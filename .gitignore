@@ -1,0 +1,19 @@
+# Created by venv; see https://docs.python.org/3/library/venv.html
+
+# Ambiente Virtual
+venv/
+.venv/
+env/
+
+# Configurações sensíveis (API KEYS)
+.env
+
+# Arquivos temporários e logs de execução
+debug/
+relatorio_limpeza.txt
+vagas_db.json
+__pycache__/
+
+# Arquivos de sistema
+.DS_Store
+Thumbs.db
