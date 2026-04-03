@@ -1,80 +1,90 @@
 import json
+import os
+import re
 import time
-from brain import analyze_job
 from playwright.sync_api import sync_playwright
+from brain import analisar_vaga
 
-def iniciar_aplicacao():
-    # 1. Carrega a lista de vagas
-    try:
-        with open("debug/lista_vagas.json", "r", encoding="utf-8") as f:
-            vagas = json.load(f)
-    except Exception:
-        print("[!] Erro: Arquivo de vagas não encontrado.")
+DB_FILE = "vagas_db.json"
+
+def validar_descricao(texto):
+    texto_min = texto.lower()
+    
+    # 1. Filtro de Localização (Mais tolerante)
+    LOCALIDADES_OK = ["natal", "rn", "rio grande do norte", "remoto", "anywhere", "home office", "remote"]
+    passou_localizacao = any(loc in texto_min for loc in LOCALIDADES_OK)
+    
+    if not passou_localizacao:
+        return False, "Localização incompatível (Não é Natal nem Remoto)"
+
+    # 2. Filtro de Experiência (Ignora o '25 anos da empresa')
+    # Só pega o número se tiver 'experiência', 'mínimo' ou 'atuação' por perto
+    exp_pattern = r'(?:experiência|mínimo|atuação|vivência|at least).{0,50}(\d+)\s*(?:ano|anos|year|years)'
+    exp_matches = re.findall(exp_pattern, texto_min)
+    
+    for anos in exp_matches:
+        if int(anos) >= 3:
+            return False, f"Senioridade alta detectada ({anos} anos de exp)"
+
+    return True, "Aprovada no pré-filtro"
+
+def processar_vagas():
+    if not os.path.exists(DB_FILE):
+        print("[!] Erro: Banco de dados não encontrado.")
         return
 
-    print(f"[*] MatchEngine pronto! {len(vagas)} vagas no radar.")
-    matches_reais = 0 
+    # AQUI AS VARIÁVEIS SÃO CRIADAS (Onde o seu deu erro antes)
+    with open(DB_FILE, "r", encoding="utf-8") as f:
+        banco_dados = json.load(f)
 
-    # --- CONFIGURAÇÃO DO FILTRO (Ajuste aqui sua stack) ---
-    TERMOS_BONS = ["dev", "desenvolvedor", "software", "estágio", "estagiário", "jr", "júnior", "c#", "java", "sistemas"]
-    TERMOS_RUINS = ["banco de talentos", "sênior", "sr", "pleno", "pl", "marketing", "vendas", "design", "produto"]
+    vagas_pendentes = {k: v for k, v in banco_dados.items() if v.get("status") == "pendente"}
+
+    if not vagas_pendentes:
+        print("[✅] Nenhuma vaga nova para analisar.")
+        return
+
+    print(f"[*] MatchEngine analisando {len(vagas_pendentes)} potenciais...")
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
         page = browser.new_page()
 
-        for link in vagas:
-            print(f"\n[🔍] Verificando: {link}")
-            
+        for url, info in vagas_pendentes.items():
             try:
-                page.goto(link, wait_until="domcontentloaded", timeout=60000)
-                time.sleep(2) # Respiro para o JS
+                print(f"\n[🔍] Lendo descrição: {info['cargo']}...")
+                page.goto(url, wait_until="networkidle", timeout=60000)
+                time.sleep(2) # Respiro para a Gupy carregar
 
-                # --- "CAÇANDO" O TÍTULO DA VAGA ---
-                # Tentamos pegar o H1 (nome do cargo), se não der, pegamos o título da aba
-                h1_element = page.query_selector("h1")
-                nome_da_vaga = h1_element.inner_text().lower() if h1_element else page.title().lower()
+                descricao_completa = page.inner_text("body")
+
+                # Camada de Pré-filtro
+                passou, motivo_filtro = validar_descricao(descricao_completa)
                 
-                print(f"[*] Cargo detectado: {nome_da_vaga.strip().upper()}")
-
-                # --- FILTRO DE ELITE (ECONOMIA DE API) ---
-                contem_bom = any(t in nome_da_vaga for t in TERMOS_BONS)
-                contem_ruim = any(t in nome_da_vaga for t in TERMOS_RUINS)
-
-                if contem_ruim or not contem_bom:
-                    print(f"[🗑️] DESCARTE AUTOMÁTICO: Título fora do perfil. (IA poupada)")
+                if not passou:
+                    print(f"[🗑️] Descartada: {motivo_filtro}")
+                    banco_dados[url]["status"] = "rejeitada_filtro"
+                    banco_dados[url]["motivo"] = motivo_filtro
                     continue
 
-                # 2. Chama a IA apenas para os "sobreviventes"
-                print("[🧠] Vaga promissora! Consultando a IA...")
-                html_da_vaga = page.content()
-                analise = analyze_job(html_da_vaga)
-                
-                # Pausa técnica para não estourar o limite de requisições por minuto
-                time.sleep(10)
+                # Camada de IA
+                print("[🧠] Passou no filtro! Consultando IA...")
+                resultado = analisar_vaga(descricao_completa)
 
-                if analise and analise.get("match"):
-                    matches_reais += 1
-                    print(f"[✅] MATCH ENCONTRADO! Score: {analise.get('score')}")
-                    print(f"[🚀] Motivo: {analise.get('motivo')}")
-                    
-                    # Interrupção para você ver o sucesso
-                    input("\n>> Pressione Enter para continuar a busca...")
-                else:
-                    motivo = analise.get("motivo") if analise else "Erro na análise"
-                    print(f"[❌] IA descartou: {motivo}")
+                if resultado:
+                    banco_dados[url]["score"] = resultado.get("score", 0)
+                    banco_dados[url]["motivo"] = resultado.get("motivo", "Sem justificativa.")
+                    banco_dados[url]["status"] = "analisado"
+                    print(f"[⭐] SCORE FINAL: {banco_dados[url]['score']}/100")
 
             except Exception as e:
-                print(f"[!] Erro ao processar esta vaga: {e}")
+                print(f"[!] Erro ao processar {url}: {e}")
 
-        # --- AVISO DE TÉRMINO ---
-        print("\n" + "="*50)
-        print(f"[🏁] BUSCA FINALIZADA!")
-        print(f"[*] Total de links processados: {len(vagas)}")
-        print(f"[*] Vagas que passaram pelo filtro: {matches_reais}")
-        print("="*50)
-        
+        # SALVANDO O BANCO (A variável banco_dados precisa estar aqui)
+        with open(DB_FILE, "w", encoding="utf-8") as f:
+            json.dump(banco_dados, f, indent=4, ensure_ascii=False)
+
         browser.close()
+        print("\n[🏁] Ciclo de análise finalizado.")
 
 if __name__ == "__main__":
-    iniciar_aplicacao()
+    processar_vagas()
