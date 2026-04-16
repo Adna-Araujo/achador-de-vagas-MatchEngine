@@ -1,1 +1,0 @@
-Python, Java, C++, C#, .NET, .NET Framework, .NET Core, .NET 8, ASP.NET MVC, Web API, Flask, Spring Boot, SQL, PostgreSQL, SQLite, MySQL, SQL Server, Docker, Git, GitHub, IoT, Automação, ESP32, ESP8266, Protocolo MQTT, Arquitetura de Microserviços, Lógica de Programação, Algoritmos, Resolução de Problemas, Troubleshooting, Desenvolvimento Back-end, Desenvolvimento Full-stack
