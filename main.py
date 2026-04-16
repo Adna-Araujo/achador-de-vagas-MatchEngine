@@ -1,90 +1,81 @@
 import json
 import os
-import re
-import time
-from playwright.sync_api import sync_playwright
-from brain import analisar_vaga
+from analyzer import extrair_texto_pdf, MatchEngineAnalyzer
 
-DB_FILE = "vagas_db.json"
+ARQUIVO_SKILLS = "skills.txt"
+ARQUIVO_VAGAS = "vagas_analise.txt"
+MEU_CURRICULO = "meu_curriculo.pdf"
+DB_RESULTADOS = "analise_vagas_match.json"
 
-def validar_descricao(texto):
-    texto_min = texto.lower()
+def carregar_minhas_skills():
+    if not os.path.exists(ARQUIVO_SKILLS): return []
+    with open(ARQUIVO_SKILLS, "r", encoding="utf-8") as f:
+        return [s.strip() for s in f.read().split(",") if s.strip()]
+
+def carregar_vagas_manuais(analyzer):
+    if not os.path.exists(ARQUIVO_VAGAS):
+        return []
+    with open(ARQUIVO_VAGAS, "r", encoding="utf-8") as f:
+        return analyzer.parse_vagas(f.read())
+
+def executar_processamento_estrategico():
+    print("[*] MatchEngine: Iniciando Ciclo de Análise Estratégica...")
     
-    # 1. Filtro de Localização (Mais tolerante)
-    LOCALIDADES_OK = ["natal", "rn", "rio grande do norte", "remoto", "anywhere", "home office", "remote"]
-    passou_localizacao = any(loc in texto_min for loc in LOCALIDADES_OK)
+    # CORREÇÃO: Carregando as variáveis antes de usar
+    skills_reais = carregar_minhas_skills()
+    texto_curriculo = extrair_texto_pdf(MEU_CURRICULO)
     
-    if not passou_localizacao:
-        return False, "Localização incompatível (Não é Natal nem Remoto)"
+    analyzer = MatchEngineAnalyzer()
+    lista_vagas = carregar_vagas_manuais(analyzer)
 
-    # 2. Filtro de Experiência (Ignora o '25 anos da empresa')
-    # Só pega o número se tiver 'experiência', 'mínimo' ou 'atuação' por perto
-    exp_pattern = r'(?:experiência|mínimo|atuação|vivência|at least).{0,50}(\d+)\s*(?:ano|anos|year|years)'
-    exp_matches = re.findall(exp_pattern, texto_min)
-    
-    for anos in exp_matches:
-        if int(anos) >= 3:
-            return False, f"Senioridade alta detectada ({anos} anos de exp)"
-
-    return True, "Aprovada no pré-filtro"
-
-def processar_vagas():
-    if not os.path.exists(DB_FILE):
-        print("[!] Erro: Banco de dados não encontrado.")
+    if not skills_reais or not lista_vagas:
+        print("[!] Erro: Verifique os arquivos de skills ou vagas.")
         return
 
-    # AQUI AS VARIÁVEIS SÃO CRIADAS (Onde o seu deu erro antes)
-    with open(DB_FILE, "r", encoding="utf-8") as f:
-        banco_dados = json.load(f)
+    print(f"[*] {len(lista_vagas)} vagas encontradas.")
+    resultados_finais = []
 
-    vagas_pendentes = {k: v for k, v in banco_dados.items() if v.get("status") == "pendente"}
+    for vaga in lista_vagas:
+        resultado = analyzer.calcular_match(skills_reais, vaga['descricao'])
+        
+        ajustes_criticos = []
+        sugestoes_melhoria = []
+        
+        # Lógica de conferência no PDF com separação por importância
+        for match in resultado['matches']:
+            variantes = analyzer.sinonimos.get(match, [])
+            termos = [match.lower()] + [v.lower() for v in variantes]
+            
+            if not any(t in texto_curriculo.lower() for t in termos):
+                # Se for uma skill obrigatória (definida no analyzer), é crítico
+                if match in analyzer.obrigatorios:
+                    ajustes_criticos.append(match)
+                else:
+                    sugestoes_melhoria.append(match)
 
-    if not vagas_pendentes:
-        print("[✅] Nenhuma vaga nova para analisar.")
-        return
+        status = "RECOMENDADA" if resultado['score'] >= 70 else "NÃO RECOMENDADA"
+        
+        print(f"\n[🔍] Vaga: {vaga['link'][:50]}...")
+        print(f"[{'✅' if status == 'RECOMENDADA' else '❌'}] Score: {resultado['score']}%")
+        print(f"[💡] Por que? {resultado['justificativa']}")
+        
+        if ajustes_criticos:
+            print(f"[🚨] CRÍTICO (Falta no seu PDF): {ajustes_criticos}")
+        if sugestoes_melhoria:
+            print(f"[📝] Sugestão de Melhoria (Palavra-chave): {sugestoes_melhoria}")
 
-    print(f"[*] MatchEngine analisando {len(vagas_pendentes)} potenciais...")
+        resultados_finais.append({
+            "link": vaga['link'],
+            "score": resultado['score'],
+            "status": status,
+            "justificativa": resultado['justificativa'],
+            "ajustes_criticos": ajustes_criticos,
+            "melhorias": sugestoes_melhoria
+        })
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
-        page = browser.new_page()
-
-        for url, info in vagas_pendentes.items():
-            try:
-                print(f"\n[🔍] Lendo descrição: {info['cargo']}...")
-                page.goto(url, wait_until="networkidle", timeout=60000)
-                time.sleep(2) # Respiro para a Gupy carregar
-
-                descricao_completa = page.inner_text("body")
-
-                # Camada de Pré-filtro
-                passou, motivo_filtro = validar_descricao(descricao_completa)
-                
-                if not passou:
-                    print(f"[🗑️] Descartada: {motivo_filtro}")
-                    banco_dados[url]["status"] = "rejeitada_filtro"
-                    banco_dados[url]["motivo"] = motivo_filtro
-                    continue
-
-                # Camada de IA
-                print("[🧠] Passou no filtro! Consultando IA...")
-                resultado = analisar_vaga(descricao_completa)
-
-                if resultado:
-                    banco_dados[url]["score"] = resultado.get("score", 0)
-                    banco_dados[url]["motivo"] = resultado.get("motivo", "Sem justificativa.")
-                    banco_dados[url]["status"] = "analisado"
-                    print(f"[⭐] SCORE FINAL: {banco_dados[url]['score']}/100")
-
-            except Exception as e:
-                print(f"[!] Erro ao processar {url}: {e}")
-
-        # SALVANDO O BANCO (A variável banco_dados precisa estar aqui)
-        with open(DB_FILE, "w", encoding="utf-8") as f:
-            json.dump(banco_dados, f, indent=4, ensure_ascii=False)
-
-        browser.close()
-        print("\n[🏁] Ciclo de análise finalizado.")
+    with open(DB_RESULTADOS, "w", encoding="utf-8") as f:
+        json.dump(resultados_finais, f, indent=4, ensure_ascii=False)
+    print(f"\n[🏁] Análise concluída. Relatório em {DB_RESULTADOS}")
 
 if __name__ == "__main__":
-    processar_vagas()
+    executar_processamento_estrategico()

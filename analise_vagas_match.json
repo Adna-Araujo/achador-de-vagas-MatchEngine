@@ -1,0 +1,47 @@
+[
+    {
+        "link": "https://www.infojobs.com.br/vaga-de-estagiario-desenvolvedor-java-em-minas-gerais__11470291.aspx",
+        "score": 37.5,
+        "status": "NÃO RECOMENDADA",
+        "justificativa": "Match baixo. A vaga foca em tecnologias que não são seu forte ou o texto da vaga está muito genérico para o seu perfil especializado.",
+        "ajustes_criticos": [],
+        "melhorias": []
+    },
+    {
+        "link": "https://www.infojobs.com.br/vaga-de-estagio-suporte-tecnico-home-office-em-bahia__11450024.aspx",
+        "score": 25.0,
+        "status": "NÃO RECOMENDADA",
+        "justificativa": "Match baixo. A vaga foca em tecnologias que não são seu forte ou o texto da vaga está muito genérico para o seu perfil especializado.",
+        "ajustes_criticos": [],
+        "melhorias": []
+    },
+    {
+        "link": "https://www.infojobs.com.br/vaga-de-estagiario-ti-remoto-em-sao-paulo__11522601.aspx",
+        "score": 100,
+        "status": "RECOMENDADA",
+        "justificativa": "Candidatura forte! Você domina Python, Java, SQL. Sua experiência prática de 52 meses em sistemas reais compensa as lacunas de ferramentas específicas.",
+        "ajustes_criticos": [
+            "PostgreSQL"
+        ],
+        "melhorias": []
+    },
+    {
+        "link": "https://www.infojobs.com.br/vaga-de-estagio-analise-desenvolvimento-sistemas-em-sao-paulo__11349067.aspx",
+        "score": 25.0,
+        "status": "NÃO RECOMENDADA",
+        "justificativa": "Match baixo. A vaga foca em tecnologias que não são seu forte ou o texto da vaga está muito genérico para o seu perfil especializado.",
+        "ajustes_criticos": [],
+        "melhorias": []
+    },
+    {
+        "link": "https://www.infojobs.com.br/vaga-de-desenvolvedora-junior-net-c-em-__11536666.aspx",
+        "score": 100,
+        "status": "RECOMENDADA",
+        "justificativa": "Candidatura forte! Você domina C#, .NET, .NET Framework. Sua experiência prática de 52 meses em sistemas reais compensa as lacunas de ferramentas específicas.",
+        "ajustes_criticos": [],
+        "melhorias": [
+            "SQL Server",
+            "Algoritmos"
+        ]
+    }
+]
