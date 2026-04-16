@@ -51,9 +51,20 @@ class MatchEngineAnalyzer:
 
     def parse_vagas(self, texto_vagas):
         vagas = []
+        # Divide pelos separadores e remove espaços extras
         blocos = [b.strip() for b in texto_vagas.split(self.separator) if b.strip()]
+    
         for bloco in blocos:
             linhas = bloco.strip().split('\n')
-            if len(linhas) >= 2:
-                vagas.append({"link": linhas[-1].strip(), "descricao": " ".join(linhas[:-1]).strip()})
+            if len(linhas) > 0:
+                # Se houver apenas uma linha, assume que é a descrição e o link fica vazio
+                link = linhas[-1].strip() if len(linhas) > 1 else "Link não informado"
+            
+                # Se houver mais de uma linha, a descrição é tudo menos a última
+                if len(linhas) > 1:
+                    descricao = " ".join(linhas[:-1]).strip()
+                else:
+                    descricao = linhas[0].strip()
+                
+                vagas.append({"link": link, "descricao": descricao})
         return vagas
