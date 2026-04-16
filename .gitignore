@@ -12,7 +12,9 @@ debug/
 relatorio_limpeza.txt
 vagas_db.json
 __pycache__/
+meu_curriculo.pdf
 
 # Arquivos de sistema
 .DS_Store
 Thumbs.db
+desktop.ini
