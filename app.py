@@ -1,3 +1,9 @@
+import sys
+import os
+
+# Adiciona o diretório onde o app.py está localizado ao caminho de busca do Python
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 import streamlit as st
 import pandas as pd
 from analyzer import MatchEngineAnalyzer, extrair_texto_pdf
